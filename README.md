@@ -52,7 +52,9 @@ optional arguments:
 ```
 
 # Experiments
-cifar10: 1000 query images, 59000 training images.
+cifar10-5000: 1000 query images, 5000 training images.
+
+cifar10-59000: 1000 query images, 59000 training images.
 
 nus-wide: 21 categories, 2100 query images, 10500 training images.
 
@@ -60,5 +62,6 @@ nus-wide: 21 categories, 2100 query images, 10500 training images.
 
  bits | 12 | 24 | 32 | 48  
    :-:   |  :-:    |   :-:   |   :-:   |   :-:     
-cifar-10 mAP | 0.9046 | 0.9120 | 0.9154 | 0.9082
+cifar10-5000 mAP | 0.7522 | 0.7831 | 0.7901 | 0.7952
+cifar10-59000 mAP | 0.9046 | 0.9120 | 0.9154 | 0.9082
 nus-wide mAP | 0.8333 | 0.8540 | 0.8618 | 0.8681
