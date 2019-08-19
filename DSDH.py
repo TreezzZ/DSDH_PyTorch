@@ -194,16 +194,6 @@ def evaluate(model,
         Query dataloader
 
         database_dataloader: DataLoader
-        Database dataloadermu,
-         nu,
-         eta,
-         model,
-         multi_gpu,
-         device,
-         epochs,
-         lr,
-         evaluate_freq,
-         topk,
 
         query_targets: Tensor
         Query targets
