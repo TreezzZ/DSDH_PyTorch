@@ -68,7 +68,7 @@ class NUS_WIDE(Dataset):
         # split data, tags
         perm_index = np.random.permutation(NUS_WIDE.ALL_IMG.shape[0])
         query_index = perm_index[:num_query]
-        train_index = perm_index[:num_train]
+        train_index = perm_index[num_query: num_query + num_train]
 
         NUS_WIDE.QUERY_IMG = NUS_WIDE.ALL_IMG[query_index, :]
         NUS_WIDE.QUERY_TARGETS = NUS_WIDE.ALL_TARGETS[query_index, :]
