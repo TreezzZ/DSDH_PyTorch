@@ -48,7 +48,7 @@ optional arguments:
                         Evaluation interval.(default: 10)
 ```
 
-# Experiments
+## EXPERIMENTS
 CNN model: Alexnet. Compute mean average precision(MAP).
 
 cifar10: 1000 query images, 5000 training images.
