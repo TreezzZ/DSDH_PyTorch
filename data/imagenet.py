@@ -1,12 +1,12 @@
-import os
-
 import torch
 import torchvision.transforms as transforms
-from PIL import Image
+
+import os
+
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
-
-from data.transform import encode_onehot
+from PIL import Image
+from data.transform import encode_onehot, Onehot
 
 
 def load_data(root, batch_size, workers):
@@ -42,11 +42,12 @@ def load_data(root, batch_size, workers):
     # Construct data loader
     train_dir = os.path.join(root, 'train')
     query_dir = os.path.join(root, 'query')
-    retrieval_dir = os.path.join(root, 'retrieval')
+    retrieval_dir = os.path.join(root, 'database')
 
     train_dataset = ImagenetDataset(
         train_dir,
         transform=train_transform,
+        target_transform=Onehot(100),
     )
 
     train_dataloader = DataLoader(
@@ -60,6 +61,7 @@ def load_data(root, batch_size, workers):
     query_dataset = ImagenetDataset(
         query_dir,
         transform=test_transform,
+        target_transform=Onehot(100),
     )
 
     query_dataloader = DataLoader(
@@ -73,6 +75,7 @@ def load_data(root, batch_size, workers):
     retrieval_dataset = ImagenetDataset(
         retrieval_dir,
         transform=test_transform,
+        target_transform=Onehot(100),
     )
 
     retrieval_dataloader = DataLoader(
@@ -83,16 +86,17 @@ def load_data(root, batch_size, workers):
         pin_memory=True,
     )
 
-    return query_dataloader, train_dataloader, retrieval_dataloader
+    return train_dataloader, query_dataloader, retrieval_dataloader
 
 
 class ImagenetDataset(Dataset):
     classes = None
     class_to_idx = None
 
-    def __init__(self, root, transform=None, num_samples=None):
+    def __init__(self, root, transform=None, target_transform=None):
         self.root = root
         self.transform = transform
+        self.target_transform = target_transform
         self.imgs = []
         self.targets = []
 
@@ -107,7 +111,7 @@ class ImagenetDataset(Dataset):
             self.imgs.extend(files)
             self.targets.extend([ImagenetDataset.class_to_idx[cl] for i in range(len(files))])
         self.targets = torch.tensor(self.targets)
-        self.onehot_targets = torch.from_numpy(encode_onehot(self.targets, 1000)).float()
+        self.onehot_targets = torch.from_numpy(encode_onehot(self.targets, 100)).float()
 
     def __len__(self):
         return len(self.imgs)
@@ -119,6 +123,10 @@ class ImagenetDataset(Dataset):
 
         if self.transform is not None:
             img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
         return img, target, item
 
     def _find_classes(self, dir):
@@ -144,3 +152,4 @@ class ImagenetDataset(Dataset):
         Return one-hot encoding targets.
         """
         return self.onehot_targets
+

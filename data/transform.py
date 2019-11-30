@@ -23,8 +23,11 @@ def encode_onehot(labels, num_classes=10):
 
 
 class Onehot(object):
-    def __call__(self, sample, num_classes=10):
-        target_onehot = torch.zeros(num_classes)
+    def __init__(self, num_classes=10):
+        self.num_classes = num_classes
+
+    def __call__(self, sample):
+        target_onehot = torch.zeros(self.num_classes)
         target_onehot[sample] = 1
 
         return target_onehot

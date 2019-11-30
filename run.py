@@ -1,5 +1,7 @@
 import torch
+import numpy as np
 import os
+import random
 import argparse
 import dsdh
 
@@ -25,6 +27,10 @@ def run():
     logger.info(args)
 
     torch.backends.cudnn.benchmark = True
+    random.seed(args.seed)                                      
+    torch.manual_seed(args.seed)                                
+    torch.cuda.manual_seed(args.seed)                           
+    np.random.seed(args.seed)
 
     # Load dataset
     query_dataloader, train_dataloader, retrieval_dataloader = load_data(
@@ -36,6 +42,7 @@ def run():
         args.num_workers,
     )
 
+    # Training
     for code_length in args.code_length:
         logger.info('[code length:{}]'.format(code_length))
         checkpoint = dsdh.train(
@@ -53,6 +60,8 @@ def run():
             args.topk,
             args.evaluate_interval,
         )
+
+        # Save checkpoint
         torch.save(checkpoint, os.path.join('checkpoints', '{}_model_{}_codelength_{}_mu_{}_nu_{}_eta_{}_topk_{}_map_{:.4f}.pt'.format(args.dataset, args.arch, code_length, args.mu, args.nu, args.eta, args.topk, checkpoint['map'])))
         logger.info('[code_length:{}][map:{:.4f}]'.format(code_length, checkpoint['map']))
             
@@ -100,6 +109,8 @@ def load_config():
                         help='Hyper-parameter.(default: 1e-2)')
     parser.add_argument('--evaluate-interval', default=10, type=int,
                         help='Evaluation interval.(default: 10)')
+    parser.add_argument('--seed', default=3367, type=int,
+                        help='Random seed.(default: 3367)')
 
     args = parser.parse_args()
 
