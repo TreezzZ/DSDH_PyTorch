@@ -1,44 +1,65 @@
-# -*- coding:utf-8 -*-
-
-import torchvision
 import torch.nn as nn
 
+from torch.hub import load_state_dict_from_url
 
-def load_model(pretrained=True, num_classes=None):
-    """加载model
 
-    Parameters
-        pretrained: bool
-        True: 加载预训练模型; False: 加载未训练模型
+def load_model(code_length):
+    """
+    Load CNN model.
 
-        num_classes: int
-        Alexnet最后一层输出
+    Args
+        code_length (int): Hashing code length.
 
     Returns
-        alexnet_model: model
-        CNN模型
+        model (torch.nn.Module): CNN model.
     """
-    model = torchvision.models.alexnet(pretrained=pretrained)
+    model = AlexNet(code_length)
+    state_dict = load_state_dict_from_url('https://download.pytorch.org/models/alexnet-owt-4df8aa71.pth')
+    model.load_state_dict(state_dict, strict=False)
 
-    if pretrained:
-        fc1 = nn.Linear(256 * 6 * 6, 4096)
-        fc1.weight = model.classifier[1].weight
-        fc1.bias = model.classifier[1].bias
+    return  model
 
-        fc2 = nn.Linear(4096, 4096)
-        fc2.weight = model.classifier[4].weight
-        fc2.bias = model.classifier[4].bias
 
-        classifier = nn.Sequential(
+class AlexNet(nn.Module):
+
+    def __init__(self, code_length):
+        super(AlexNet, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+        self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
+        self.classifier = nn.Sequential(
             nn.Dropout(),
-            fc1,
+            nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            fc2,
+            nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
-            nn.Linear(4096, num_classes),
+            nn.Linear(4096 ,1000),
         )
 
-        model.classifier = classifier
+        self.classifier = self.classifier[:-1]
+        self.hash_layer = nn.Sequential(
+            nn.Linear(4096, code_length),
+            nn.Tanh(),
+        )
 
-    return model
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = x.view(x.size(0), 256 * 6 * 6)
+        x = self.classifier(x)
+        x = self.hash_layer(x)
+        return x

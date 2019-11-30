@@ -1,39 +1,18 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-
-import torch
 import numpy as np
+import torch
 import torchvision.transforms as transforms
 
 
-class Onehot(object):
-    """one-hot编码transform
-    """
-
-    def __init__(self):
-        pass
-
-    def __call__(self, sample, num_classes=10):
-        target_onehot = torch.zeros(num_classes)
-        target_onehot[sample] = 1
-
-        return target_onehot
-
-
 def encode_onehot(labels, num_classes=10):
-    """one-hot编码labels
+    """
+    one-hot labels
 
-    Parameters
-        labels: ndarray
-        标签
+    Args:
+        labels (numpy.ndarray): labels.
+        num_classes (int): Number of classes.
 
-        num_classes: int
-        类别数量
-
-    Returns
-        onehot_labels: ndarray
-        onehot编码后的标签
+    Returns:
+        onehot_labels (numpy.ndarray): one-hot labels.
     """
     onehot_labels = np.zeros((len(labels), num_classes))
 
@@ -43,34 +22,50 @@ def encode_onehot(labels, num_classes=10):
     return onehot_labels
 
 
-def img_transform():
-    """返回transform
+class Onehot(object):
+    def __call__(self, sample, num_classes=10):
+        target_onehot = torch.zeros(num_classes)
+        target_onehot[sample] = 1
 
-    Returns:
-        transform: transforms
-        图像变换
+        return target_onehot
+
+
+def train_transform():
     """
-    transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(227),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
+    Training images transform.
 
-    return transform
-
-
-def normalization(data):
-    """归一化数据 (data - mean) / std
-
-    Parameters
-        data: ndarray
-        数据
+    Args
+        None
 
     Returns
-        normalized_data: ndarray
-        归一化后数据
+        transform(torchvision.transforms): transform
     """
-    if data.dtype != np.float:
-        data = data.astype(np.float)
-    return (data - data.mean()) / data.std()
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+    return transforms.Compose([
+        transforms.RandomResizedCrop(224),                         
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+    ])
+
+
+def query_transform():
+    """
+    Query images transform.
+
+    Args
+        None
+
+    Returns
+        transform(torchvision.transforms): transform
+    """
+    # Data transform
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+    return transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])

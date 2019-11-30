@@ -1,106 +1,195 @@
-# -*- coding:utf-8 -*-
-
-from torch.utils.data import Dataset
-from torch.utils.data.dataloader import DataLoader
-from data.transform import img_transform
+import os
 
 import numpy as np
-import os
-from PIL import Image
+import torch
+from PIL import Image, ImageFile
+from torch.utils.data.dataloader import DataLoader
+from torch.utils.data.dataset import Dataset
+
+from data.transform import train_transform, query_transform
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-def load_data(opt):
-    """加载NUS-WIDE数据集
+def load_data(tc, root, num_query, num_train, batch_size, num_workers,
+):
+    """
+    Loading nus-wide dataset.
 
-    Parameters
-        opt:Parser
-        配置
+    Args:
+        tc(int): Top class.
+        root(str): Path of image files.
+        num_query(int): Number of query data.
+        num_train(int): Number of training data.
+        batch_size(int): Batch size.
+        num_workers(int): Number of loading data threads.
 
     Returns
-        query_dataloader, train_dataloader, database_dataloader: DataLoader
-        数据加载器
+        query_dataloader, train_dataloader, retrieval_dataloader(torch.evaluate.data.DataLoader): Data loader.
     """
-    NUS_WIDE.init(opt.data_path, opt.num_query, opt.num_train)
-    query_dataset = NUS_WIDE('query', transform=img_transform())
-    train_dataset = NUS_WIDE('train', transform=img_transform())
-    database_dataset = NUS_WIDE('all', transform=img_transform())
+    if tc == 21:
+        query_dataset = NusWideDatasetTC21(
+            root,
+            'test_img.txt',
+            'test_label_onehot.txt',
+            transform=query_transform(),
+        )
 
-    query_dataloader = DataLoader(query_dataset,
-                                  batch_size=opt.batch_size,
-                                  num_workers=opt.num_workers,
-                                  )
-    train_dataloader = DataLoader(train_dataset,
-                                  shuffle=True,
-                                  batch_size=opt.batch_size,
-                                  num_workers=opt.num_workers,
-                                  )
-    database_dataloader = DataLoader(database_dataset,
-                                     batch_size=opt.batch_size,
-                                     num_workers=opt.num_workers,
-                                     )
+        train_dataset = NusWideDatasetTC21(
+            root,
+            'database_img.txt',
+            'database_label_onehot.txt',
+            transform=train_transform(),
+            train=True,
+            num_train=num_train,
+        )
 
-    return query_dataloader, train_dataloader, database_dataloader
+        retrieval_dataset = NusWideDatasetTC21(
+            root,
+            'database_img.txt',
+            'database_label_onehot.txt',
+            transform=query_transform(),
+        )
+    elif tc == 10:
+        NusWideDatasetTc10.init(root, num_query, num_train)
+        query_dataset = NusWideDatasetTc10(root, 'query', query_transform())
+        train_dataset = NusWideDatasetTc10(root, 'train', train_transform())
+        retrieval_dataset = NusWideDatasetTc10(root, 'retrieval', query_transform())
+
+    query_dataloader = DataLoader(
+        query_dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        num_workers=num_workers,
+    )
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        pin_memory=True,
+        num_workers=num_workers,
+    )
+    retrieval_dataloader = DataLoader(
+        retrieval_dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        num_workers=num_workers,
+    )
+
+    return query_dataloader, train_dataloader, retrieval_dataloader
 
 
-class NUS_WIDE(Dataset):
-    @staticmethod
-    def init(path, num_query, num_train):
-        # load data, tags
-        NUS_WIDE.ALL_IMG = np.load(os.path.join(path, 'nus-wide-21-img.npy'))
-        NUS_WIDE.ALL_TARGETS = np.load(os.path.join(path, 'nus-wide-21-tag.npy')).astype(np.float32)
-        NUS_WIDE.ALL_IMG = NUS_WIDE.ALL_IMG.transpose((0, 2, 3, 1))
+class NusWideDatasetTc10(Dataset):
+    """
+    Nus-wide dataset, 10 classes.
 
-        # 打算平衡采样，每类都采样一些，可是内存大小不够
-        # split data, tags
-        # query_per_class = num_query // 21
-        # train_per_class = num_train // 21
-        # for i in range(21):
-        #     non_zero_index = np.asarray(np.where(NUS_WIDE.ALL_TAGS[:, i] == 1))
-        #     non_zero_index = non_zero_index[np.random.permutation(non_zero_index.shape[0])]
-        #     if not i:
-        #         query_index = non_zero_index[:query_per_class]
-        #         train_index = non_zero_index[query_per_class: query_per_class + train_per_class]
-        #     else:
-        #         query_index = np.hstack((query_index, non_zero_index[:query_per_class]))
-        #         train_index = np.hstack(
-        #             (train_index, non_zero_index[query_per_class: query_per_class + train_per_class]))
-
-        # split data, tags
-        perm_index = np.random.permutation(NUS_WIDE.ALL_IMG.shape[0])
-        query_index = perm_index[:num_query]
-        train_index = perm_index[num_query: num_query + num_train]
-
-        NUS_WIDE.QUERY_IMG = NUS_WIDE.ALL_IMG[query_index, :]
-        NUS_WIDE.QUERY_TARGETS = NUS_WIDE.ALL_TARGETS[query_index, :]
-        NUS_WIDE.TRAIN_IMG = NUS_WIDE.ALL_IMG[train_index, :]
-        NUS_WIDE.TRAIN_TARGETS = NUS_WIDE.ALL_TARGETS[train_index, :]
-
-    def __init__(self, mode, transform=None, target_transform=None):
+    Args
+        root(str): Path of dataset.
+        mode(str, 'train', 'query', 'retrieval'): Mode of dataset.
+        transform(callable, optional): Transform images.
+    """
+    def __init__(self, root, mode, transform=None):
+        self.root = root
         self.transform = transform
-        self.target_transform = target_transform
 
         if mode == 'train':
-            self.img = NUS_WIDE.TRAIN_IMG
-            self.targets = NUS_WIDE.TRAIN_TARGETS
+            self.data = NusWideDatasetTc10.TRAIN_DATA
+            self.targets = NusWideDatasetTc10.TRAIN_TARGETS
         elif mode == 'query':
-            self.img = NUS_WIDE.QUERY_IMG
-            self.targets = NUS_WIDE.QUERY_TARGETS
+            self.data = NusWideDatasetTc10.QUERY_DATA
+            self.targets = NusWideDatasetTc10.QUERY_TARGETS
+        elif mode == 'retrieval':
+            self.data = NusWideDatasetTc10.RETRIEVAL_DATA
+            self.targets = NusWideDatasetTc10.RETRIEVAL_TARGETS
         else:
-            self.img = NUS_WIDE.ALL_IMG
-            self.targets = NUS_WIDE.ALL_TARGETS
+            raise ValueError(r'Invalid arguments: mode, can\'t load dataset!')
 
     def __getitem__(self, index):
-        img, target = self.img[index], self.targets[index]
+        img = Image.open(os.path.join(self.root, self.data[index])).convert('RGB')
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, self.targets[index], index
 
-        img = Image.fromarray(img)
+    def __len__(self):
+        return self.data.shape[0]
 
+    def get_targets(self):
+        return torch.from_numpy(self.targets).float()
+
+    @staticmethod
+    def init(root, num_query, num_train):
+        """
+        Initialize dataset.
+
+        Args
+            root(str): Path of image files.
+            num_query(int): Number of query data.
+            num_train(int): Number of training data.
+        """
+        # Load dataset
+        img_txt_path = os.path.join(root, 'img_tc10.txt')
+        targets_txt_path = os.path.join(root, 'targets_onehot_tc10.txt')
+
+        # Read files
+        with open(img_txt_path, 'r') as f:
+            data = np.array([i.strip() for i in f])
+        targets = np.loadtxt(targets_txt_path, dtype=np.int64)
+
+        # Split dataset
+        perm_index = np.random.permutation(data.shape[0])
+        query_index = perm_index[:num_query]
+        train_index = perm_index[num_query: num_query + num_train]
+        retrieval_index = perm_index[num_query:]
+
+        NusWideDatasetTc10.QUERY_DATA = data[query_index]
+        NusWideDatasetTc10.QUERY_TARGETS = targets[query_index, :]
+
+        NusWideDatasetTc10.TRAIN_DATA = data[train_index]
+        NusWideDatasetTc10.TRAIN_TARGETS = targets[train_index, :]
+
+        NusWideDatasetTc10.RETRIEVAL_DATA = data[retrieval_index]
+        NusWideDatasetTc10.RETRIEVAL_TARGETS = targets[retrieval_index, :]
+
+
+class NusWideDatasetTC21(Dataset):
+    """
+    Nus-wide dataset, 21 classes.
+
+    Args
+        root(str): Path of image files.
+        img_txt(str): Path of txt file containing image file name.
+        label_txt(str): Path of txt file containing image label.
+        transform(callable, optional): Transform images.
+        train(bool, optional): Return training dataset.
+        num_train(int, optional): Number of training data.
+    """
+    def __init__(self, root, img_txt, label_txt, transform=None, train=None, num_train=None):
+        self.root = root
+        self.transform = transform
+
+        img_txt_path = os.path.join(root, img_txt)
+        label_txt_path = os.path.join(root, label_txt)
+
+        # Read files
+        with open(img_txt_path, 'r') as f:
+            self.data = np.array([i.strip() for i in f])
+        self.targets = np.loadtxt(label_txt_path, dtype=np.float32)
+
+        # Sample training dataset
+        if train is True:
+            perm_index = np.random.permutation(len(self.data))[:num_train]
+            self.data = self.data[perm_index]
+            self.targets = self.targets[perm_index]
+
+    def __getitem__(self, index):
+        img = Image.open(os.path.join(self.root, self.data[index])).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
 
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-
-        return img, target, index
+        return img, self.targets[index], index
 
     def __len__(self):
-        return self.img.shape[0]
+        return len(self.data)
+
+    def get_onehot_targets(self):
+        return torch.from_numpy(self.targets).float()
